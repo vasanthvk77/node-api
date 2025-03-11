@@ -4,13 +4,20 @@ const mongoose = require("mongoose");
 const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
+
+// ✅ Ensure 'uploads' directory exists
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR);
+}
 
 // ✅ Middleware
 app.use(cors({ origin: "*" })); // Allow all origins (Modify for security)
 app.use(express.json());
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 // ✅ Connect to MongoDB
 mongoose
@@ -36,7 +43,7 @@ const Song = mongoose.model("Song", SongSchema);
 
 // ✅ Multer Storage for File Uploads
 const storage = multer.diskStorage({
-  destination: "./uploads",
+  destination: UPLOADS_DIR,
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   },
@@ -69,11 +76,22 @@ app.post("/upload", upload.fields([{ name: "image" }, { name: "audio" }]), async
   }
 });
 
+// ✅ Get All Songs Route
+app.get("/songs", async (req, res) => {
+  try {
+    const songs = await Song.find();
+    res.json(songs);
+  } catch (error) {
+    console.error("❌ Fetch Songs Error:", error);
+    res.status(500).json({ error: "Server Error: Unable to fetch songs." });
+  }
+});
+
 // ✅ Fallback Route (404)
 app.use((req, res) => {
   res.status(404).json({ error: "Route Not Found" });
 });
 
-// ✅ Start Server
+// ✅ Start Server (Listen on 0.0.0.0 for public access)
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
