@@ -19,6 +19,12 @@ app.use(cors({ origin: "*" })); // Allow all origins (Modify for security)
 app.use(express.json());
 app.use("/uploads", express.static(UPLOADS_DIR));
 
+// ✅ Logging Middleware (For Debugging)
+app.use((req, res, next) => {
+  console.log(`📢 ${req.method} request to ${req.url}`);
+  next();
+});
+
 // ✅ Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -92,6 +98,27 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route Not Found" });
 });
 
-// ✅ Start Server (Listen on 0.0.0.0 for public access)
+// ✅ Prevent Railway SIGTERM Auto Shutdown (Keeps Container Alive)
+setInterval(() => {
+  console.log("🔄 Keeping Railway App Alive...");
+}, 10 * 60 * 1000); // Every 10 minutes
+
+// ✅ Graceful Shutdown Handling
+process.on("SIGTERM", () => {
+  console.log("⚠️ SIGTERM Received: Closing Server...");
+  process.exit(0);
+});
+process.on("SIGINT", () => {
+  console.log("⚠️ SIGINT Received: Closing Server...");
+  process.exit(0);
+});
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception:", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("❌ Unhandled Rejection:", err);
+});
+
+// ✅ Start Server (0.0.0.0 for Public Access)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
