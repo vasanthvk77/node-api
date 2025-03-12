@@ -14,40 +14,28 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR);
 }
 
-// ✅ Middleware
-app.use(cors({ origin: "*" })); // Allow all origins (Modify for security)
+// ✅ Middleware for Different Data Formats
+app.use(cors()); // Allow all origins (Modify for security)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(UPLOADS_DIR));
 
-// ✅ Logging Middleware (For Debugging)
-app.use((req, res, next) => {
-  console.log(`📢 ${req.method} request to ${req.url}`);
-  next();
-});
-
-// ✅ Connect to MongoDB
+// ✅ MongoDB Connection (Using Railway's Env Variables)
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => {
-    console.error("❌ MongoDB Connection Error:", err);
-    process.exit(1); // Stop server if DB fails
-  });
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// ✅ Define Schema & Model
+// ✅ Define Mongoose Schema & Model
 const SongSchema = new mongoose.Schema({
   title: { type: String, required: true },
   artist: { type: String, required: true },
-  image: String,
-  audio: String,
+  files: [{ type: String }], // Store multiple file paths
 });
 
 const Song = mongoose.model("Song", SongSchema);
 
-// ✅ Multer Storage for File Uploads
+// ✅ Multer Storage for Multiple File Uploads
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
   filename: (req, file, cb) => {
@@ -56,23 +44,17 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ✅ Routes
-app.get("/", (req, res) => {
-  res.send("🎵 Welcome to My Music API! 🚀");
-});
-
-// ✅ Upload Route
-app.post("/upload", upload.fields([{ name: "image" }, { name: "audio" }]), async (req, res) => {
+// ✅ Route: Upload Songs (Multiple Formats Supported)
+app.post("/upload", upload.array("files", 5), async (req, res) => {
   try {
     const { title, artist } = req.body;
     if (!title || !artist) {
       return res.status(400).json({ error: "Title and artist are required." });
     }
 
-    const image = req.files.image ? `/uploads/${req.files.image[0].filename}` : null;
-    const audio = req.files.audio ? `/uploads/${req.files.audio[0].filename}` : null;
+    const filePaths = req.files.map((file) => `/uploads/${file.filename}`);
 
-    const newSong = new Song({ title, artist, image, audio });
+    const newSong = new Song({ title, artist, files: filePaths });
     await newSong.save();
 
     res.status(201).json(newSong);
@@ -82,7 +64,7 @@ app.post("/upload", upload.fields([{ name: "image" }, { name: "audio" }]), async
   }
 });
 
-// ✅ Get All Songs Route
+// ✅ Route: Get All Songs
 app.get("/songs", async (req, res) => {
   try {
     const songs = await Song.find();
@@ -93,32 +75,16 @@ app.get("/songs", async (req, res) => {
   }
 });
 
+// ✅ Route: Home (Check if API is working)
+app.get("/", (req, res) => {
+  res.json({ message: "🎵 Welcome to My Music API! 🚀" });
+});
+
 // ✅ Fallback Route (404)
 app.use((req, res) => {
   res.status(404).json({ error: "Route Not Found" });
 });
 
-// ✅ Prevent Railway SIGTERM Auto Shutdown (Keeps Container Alive)
-setInterval(() => {
-  console.log("🔄 Keeping Railway App Alive...");
-}, 10 * 60 * 1000); // Every 10 minutes
-
-// ✅ Graceful Shutdown Handling
-process.on("SIGTERM", () => {
-  console.log("⚠️ SIGTERM Received: Closing Server...");
-  process.exit(0);
-});
-process.on("SIGINT", () => {
-  console.log("⚠️ SIGINT Received: Closing Server...");
-  process.exit(0);
-});
-process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception:", err);
-});
-process.on("unhandledRejection", (err) => {
-  console.error("❌ Unhandled Rejection:", err);
-});
-
-// ✅ Start Server (0.0.0.0 for Public Access)
+// ✅ Start Server on Railway Port
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
